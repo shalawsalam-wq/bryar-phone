@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="ku" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بڕیار فۆن | سیستەمی کڕین و کۆگای مۆبایل (Supabase)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Kurdish Font (Vazirmatn) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Vazirmatn', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81',
+                            950: '#1e1b4b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Vazirmatn', sans-serif; }
+        
+        /* شاردنەوەی سکرۆڵباری نەگونجاو لەسەر ڕەش و ستایلکردنی بە شێوازی تاریک */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #09090b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3f3f46;
+        }
+
+        /* بەشی چاپکردنی پسوولە (تایبەت بە کاغەزی سپی) */
+        @media print {
+            body * { visibility: hidden; }
+            #printableReceipt, #printableReceipt * { visibility: visible; }
+            #printableReceipt {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 20px;
+                background: white !important;
+                color: black !important;
+            }
+            #printableReceipt * {
+                color: black !important;
+                background-color: transparent !important;
+                border-color: #cbd5e1 !important;
+            }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-black text-zinc-100 min-h-screen flex flex-col justify-between selection:bg-brand-500/30 selection:text-white antialiased">
+
+    <!-- سەرپەڕەی سەرەکی (Header) -->
+    <header class="bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/80 sticky top-0 z-30 shadow-lg shadow-black/40 no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <div class="w-10 h-10 rounded-xl bg-brand-600 flex items-center justify-center text-white shadow-lg shadow-brand-500/25 border border-brand-400/20">
+                    <i data-lucide="smartphone" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-extrabold text-white tracking-tight">بڕیار فۆن</h1>
+                    <p class="text-xs text-zinc-400 font-medium">بەڕێوەبردنی کڕین و ئەرشیفی مۆبایل</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2.5">
+                <!-- خاڵی سەوزی دۆخی پەیوەستبوون بەبێ نوسین -->
+                <span id="cloudStatus" title="پەیوەستە بە بنکەدراوە" class="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-700/50 text-emerald-400">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                </span>
+                <button onclick="exportToCSV()" class="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-zinc-800 bg-zinc-900/90 hover:bg-zinc-800 hover:text-white text-zinc-300 transition duration-150">
+                    <i data-lucide="download" class="w-4 h-4 text-zinc-400"></i>
+                    <span>دەرکردنی داتا (CSV)</span>
+                </button>
+                <button onclick="openModal()" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-brand-600 hover:bg-brand-500 text-white shadow-lg shadow-brand-600/30 transition duration-150 border border-brand-500/40">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>تۆمارکردنی کڕین</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 flex-1 w-full">
+
+        <!-- ئامارەکان (Summary Dashboard) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-zinc-900/70 p-5 rounded-2xl border border-zinc-800/80 shadow-md backdrop-blur-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-zinc-400 mb-1">کۆی مۆبایلە کڕدراوەکان</p>
+                    <h3 id="statTotalCount" class="text-2xl font-bold text-white tracking-tight">0</h3>
+                </div>
+                <div class="p-3 bg-brand-950/70 text-brand-400 border border-brand-800/40 rounded-xl">
+                    <i data-lucide="layers" class="w-6 h-6"></i>
+                </div>
+            </div>
+
+            <div class="bg-zinc-900/70 p-5 rounded-2xl border border-zinc-800/80 shadow-md backdrop-blur-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-zinc-400 mb-1">کۆی سەرمایە بە دۆلار ($)</p>
+                    <h3 id="statTotalUSD" class="text-2xl font-bold text-emerald-400 tracking-tight">$0</h3>
+                </div>
+                <div class="p-3 bg-emerald-950/70 text-emerald-400 border border-emerald-800/40 rounded-xl">
+                    <i data-lucide="badge-dollar-sign" class="w-6 h-6"></i>
+                </div>
+            </div>
+
+            <div class="bg-zinc-900/70 p-5 rounded-2xl border border-zinc-800/80 shadow-md backdrop-blur-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-zinc-400 mb-1">کۆی سەرمایە بە دینار (IQD)</p>
+                    <h3 id="statTotalIQD" class="text-2xl font-bold text-indigo-400 tracking-tight">0 د.ع</h3>
+                </div>
+                <div class="p-3 bg-indigo-950/70 text-indigo-400 border border-indigo-800/40 rounded-xl">
+                    <i data-lucide="wallet" class="w-6 h-6"></i>
+                </div>
+            </div>
+
+            <div class="bg-zinc-900/70 p-5 rounded-2xl border border-zinc-800/80 shadow-md backdrop-blur-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-zinc-400 mb-1">کڕینەکانی ئەمڕۆ</p>
+                    <h3 id="statTodayCount" class="text-2xl font-bold text-amber-400 tracking-tight">0</h3>
+                </div>
+                <div class="p-3 bg-amber-950/70 text-amber-400 border border-amber-800/40 rounded-xl">
+                    <i data-lucide="calendar-check" class="w-6 h-6"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- فلتەر و گەڕان (Search & Filter) -->
+        <div class="bg-zinc-900/70 p-4 rounded-2xl border border-zinc-800/80 shadow-md backdrop-blur-sm flex flex-col md:flex-row gap-3 items-center justify-between">
+            <div class="relative w-full md:w-96">
+                <i data-lucide="search" class="w-4 h-4 text-zinc-500 absolute right-3.5 top-3.5"></i>
+                <input type="text" id="searchInput" oninput="renderTable()" placeholder="گەڕان بەپێی جۆر، فرۆشیار، تەلەفۆن، یان IMEI..." 
+                       class="w-full pl-4 pr-10 py-2 rounded-xl bg-black border border-zinc-800 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm transition">
+            </div>
+            <div class="flex items-center gap-2.5 w-full md:w-auto">
+                <select id="storageFilter" onchange="renderTable()" class="w-full md:w-auto px-3 py-2 rounded-xl border border-zinc-800 bg-black text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    <option value="">هەموو بیرگەکان</option>
+                    <option value="32GB">32GB</option>
+                    <option value="64GB">64GB</option>
+                    <option value="128GB">128GB</option>
+                    <option value="256GB">256GB</option>
+                    <option value="512GB">512GB</option>
+                    <option value="1TB">1TB</option>
+                    <option value="2TB">2TB</option>
+                </select>
+                <button onclick="clearAllData()" class="text-xs font-semibold text-rose-400 hover:text-rose-300 px-3 py-2 rounded-lg hover:bg-rose-950/40 border border-transparent hover:border-rose-900/50 transition whitespace-nowrap" title="پاککردنەوەی هەموو داتاکان لە داتابەیس">
+                    سڕینەوەی گشتی
+                </button>
+            </div>
+        </div>
+
+        <!-- خشتەی داتاکان (Table) -->
+        <div class="bg-zinc-900/70 rounded-2xl border border-zinc-800/80 shadow-md overflow-hidden relative backdrop-blur-sm">
+            <!-- نیشاندەری بارکردن (Loading Spinner) -->
+            <div id="loadingIndicator" class="hidden absolute inset-0 bg-black/85 backdrop-blur-[2px] z-20 flex items-center justify-center">
+                <div class="flex flex-col items-center gap-2 text-brand-400">
+                    <i data-lucide="loader-2" class="w-8 h-8 animate-spin"></i>
+                    <span class="text-xs font-semibold text-zinc-300">پەیوەستبوون بە Supabase...</span>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-right text-sm">
+                    <thead class="bg-zinc-950/90 text-zinc-400 text-xs font-bold border-b border-zinc-800">
+                        <tr>
+                            <th class="py-3.5 px-4">مۆبایل و بیرگە</th>
+                            <th class="py-3.5 px-4">ڕەنگ</th>
+                            <th class="py-3.5 px-4">ژمارەی IMEI</th>
+                            <th class="py-3.5 px-4">فرۆشیار و پەیوەندی</th>
+                            <th class="py-3.5 px-4">نرخی کڕین</th>
+                            <th class="py-3.5 px-4">بەروار</th>
+                            <th class="py-3.5 px-4 text-center">کردارەکان</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventoryTableBody" class="divide-y divide-zinc-800/80 text-zinc-200">
+                        <!-- داتاکان بە شێوەی دینامیکی پڕدەکرێنەوە -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- دەقی بەتاڵبوونی خشتە -->
+            <div id="emptyState" class="hidden py-16 flex flex-col items-center justify-center text-zinc-500">
+                <i data-lucide="inbox" class="w-12 h-12 stroke-[1.5] mb-2 text-zinc-600"></i>
+                <p class="font-medium text-zinc-400">هیچ مۆبایلێک لە بنکەدراوەدا نەدۆزرایەوە</p>
+                <p class="text-xs text-zinc-500">کرتە لەسەر دوگمەی "تۆمارکردنی کڕین" بکە بۆ تۆمارکردن</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- بەشی خوارەوەی پەڕەکە (Footer) -->
+    <footer class="no-print bg-black border-t border-zinc-900 mt-12 transition-colors">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-500">
+            <div class="flex items-center gap-2">
+                <span class="font-semibold text-zinc-300">بڕیار فۆن</span>
+                <span>•</span>
+                <span>سیستەمی بەڕێوەبردنی کڕین و کۆگا</span>
+            </div>
+            <div>
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-zinc-400 transition font-medium tracking-wide dir-ltr text-[11px]" dir="ltr">
+                    <span class="w-1.5 h-1.5 rounded-full bg-brand-500"></span>
+                    created by <span class="font-bold text-zinc-200">Shallaw Halabjayi</span>
+                </span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- مۆداڵی فۆرمی تۆمارکردنی نوێ (Modal) -->
+    <div id="formModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-zinc-900 w-full max-w-xl rounded-2xl shadow-2xl border border-zinc-800 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div class="px-6 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/70">
+                <div class="flex items-center gap-2 text-white">
+                    <i data-lucide="plus-circle" class="w-5 h-5 text-brand-400"></i>
+                    <h3 class="font-bold text-base">تۆمارکردنی مۆبایلی کڕدراو</h3>
+                </div>
+                <button onclick="closeModal()" class="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="purchaseForm" onsubmit="handleFormSubmit(event)" class="p-6 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- جۆری مۆبایل -->
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-300 mb-1">جۆری مۆبایل *</label>
+                        <input type="text" id="model" required placeholder="وەک: iPhone 15 Pro Max" 
+                               class="w-full px-3 py-2 rounded-xl bg-black border border-zinc-800 text-white placeholder-zinc-500 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none transition">
+                    </div>
+
+                    <!-- ڕەنگ -->
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-300 mb-1">ڕەنگ *</label>
+                        <input type="text" id="color" required placeholder="وەک: ڕەش، سروشتی..." 
+                               class="w-full px-3 py-2 rounded-xl bg-black border border-zinc-800 text-white placeholder-zinc-500 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none transition">
+                    </div>
+
+                    <!-- بیرگە -->
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-300 mb-1">بیرگە (Storage) *</label>
+                        <select id="storage" required class="w-full px-3 py-2 rounded-xl bg-black border border-zinc-800 text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none transition">
+                            <option value="32GB">32GB</option>
+                            <option value="64GB">64GB</option>
+                            <option value="128GB" selected>128GB</option>
+                            <option value="256GB">256GB</option>
+                            <option value="512GB">512GB</option>
+                            <option value="1TB">1TB</option>
+                            <option value="2TB">2TB</option>
+                        </select>
+                    </div>
+
+                    <!-- ژمارەی IMEI -->
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-300 mb-1">ژمارەی IMEI (١٥ ژمارە) *</label>
+                        <input type="text" id="imei" required placeholder="358912345678901" 
+                               class="w-full px-3 py-2 rounded-xl bg-black border border-zinc-800 text-white placeholder-zinc-500 text-sm font-mono focus:ring-2 focus:ring-brand-500 focus:outline-none transition">
+                    </div>
+
+                    <!-- ناوی فرۆشیار -->
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-300 mb-1">ناوی فرۆشیار / کەسەکە *</label>
+                        <input type="text" id="sellerName" required placeholder="ناوی چواری یان سیانی" 
+                               class="w-full px-3 py-2 rounded-xl bg-black border border-zinc-800 text-white placeholder-zinc-500 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none transition">
+                    </div>
+
+                    <!-- ژمارەی تەلەفۆنی فرۆشیار -->
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-300 mb-1">ژمارەی مۆبایل *</label>
+                        <input type="tel" id="sellerPhone" required placeholder="0750XXXXXXX" 
+                               class="w-full px-3 py-2 rounded-xl bg-black border border-zinc-800 text-white placeholder-zinc-500 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none transition">
+                    </div>
+
+                    <!-- نرخی کڕین و دراو -->
+                    <div class="col-span-1 md:col-span-2">
+                        <label class="block text-xs font-semibold text-zinc-300 mb-1">نرخی کڕین *</label>
+                        <div class="flex gap-2">
+                            <input type="number" id="price" required min="1" step="any" placeholder="بڕی پارەکە بنووسە" 
+                                   class="flex-1 px-3 py-2 rounded-xl bg-black border border-zinc-800 text-white placeholder-zinc-500 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none transition">
+                            <select id="currency" class="w-32 px-3 py-2 rounded-xl bg-black border border-zinc-800 text-white text-sm font-medium focus:ring-2 focus:ring-brand-500">
+                                <option value="USD">دۆلار ($)</option>
+                                <option value="IQD">دینار (IQD)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- بەرواری کڕین -->
+                    <div class="col-span-1 md:col-span-2">
+                        <label class="block text-xs font-semibold text-zinc-300 mb-1">بەرواری کڕین *</label>
+                        <input type="date" id="purchaseDate" required 
+                               class="w-full px-3 py-2 rounded-xl bg-black border border-zinc-800 text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none transition [color-scheme:dark]">
+                    </div>
+                </div>
+
+                <div class="pt-4 border-t border-zinc-800 flex items-center justify-end gap-2">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl transition">داخستن</button>
+                    <button type="submit" id="submitBtn" class="px-5 py-2 text-sm font-semibold bg-brand-600 hover:bg-brand-500 text-white rounded-xl shadow-lg shadow-brand-600/30 transition flex items-center gap-2 border border-brand-500/40">
+                        <span>تۆمارکردن</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- مۆداڵی بینین و چاپکردنی پسوولە (Receipt Modal) -->
+    <div id="receiptModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-zinc-900 border border-zinc-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div id="printableReceipt" class="p-6 text-zinc-200 space-y-4 bg-zinc-900">
+                <div class="text-center border-b pb-4 border-zinc-800">
+                    <h2 class="text-xl font-black text-brand-400">بڕیار فۆن</h2>
+                    <p class="text-xs text-zinc-400 font-medium">پسوولەی فەرمی کڕینی مۆبایل</p>
+                    <p id="receiptCode" class="text-[10px] text-zinc-500 font-mono mt-1">#BP-0000</p>
+                </div>
+
+                <div class="bg-black/60 p-3.5 rounded-xl border border-zinc-800/80 space-y-2 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-zinc-400">جۆری ئامێر:</span>
+                        <span id="rcModel" class="font-bold text-white">-</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-zinc-400">بیرگە / ڕەنگ:</span>
+                        <span id="rcStorageColor" class="font-medium text-zinc-300">-</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-zinc-400">ژمارەی IMEI:</span>
+                        <span id="rcIMEI" class="font-mono font-bold text-brand-300">-</span>
+                    </div>
+                </div>
+
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between border-b border-dashed border-zinc-800 pb-2">
+                        <span class="text-zinc-400">ناوی فرۆشیار:</span>
+                        <span id="rcSellerName" class="font-semibold text-zinc-200">-</span>
+                    </div>
+                    <div class="flex justify-between border-b border-dashed border-zinc-800 pb-2">
+                        <span class="text-zinc-400">ژمارەی پەیوەندی:</span>
+                        <span id="rcSellerPhone" class="font-mono text-zinc-200">-</span>
+                    </div>
+                    <div class="flex justify-between border-b border-dashed border-zinc-800 pb-2">
+                        <span class="text-zinc-400">بەروار:</span>
+                        <span id="rcDate" class="text-zinc-300 font-mono">-</span>
+                    </div>
+                    <div class="flex justify-between items-center pt-1 text-sm">
+                        <span class="font-bold text-zinc-300">نرخی ڕێککەوتوو:</span>
+                        <span id="rcPrice" class="font-extrabold text-brand-400 text-base">-</span>
+                    </div>
+                </div>
+
+                <div class="p-2.5 bg-amber-950/40 rounded-lg border border-amber-900/60 text-[10px] text-amber-200/90 leading-relaxed text-justify">
+                    * من کە ناوم لە سەرەوە هاتووە وەک فرۆشیار، تەواوی بەرپرسیاریەتی یاسایی و خاوەندارێتی ئەم ئامێرە دەگرمە ئەستۆ و دڵنیایی دەدەم کە ئامێرەکە هیچ گرفتێکی یاسایی و ئەمنی نییە.
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 pt-6 text-center text-xs">
+                    <div class="border-t border-zinc-700 pt-2">
+                        <span class="text-zinc-500">واژووی فرۆشیار</span>
+                    </div>
+                    <div class="border-t border-zinc-700 pt-2">
+                        <span class="text-zinc-500">مۆری بڕیار فۆن</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="no-print bg-zinc-950/80 px-6 py-3 border-t border-zinc-800 flex items-center justify-between">
+                <button onclick="closeReceiptModal()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition">داخستن</button>
+                <button onclick="window.print()" class="px-4 py-2 text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white rounded-lg flex items-center gap-1.5 shadow-lg shadow-brand-600/30 transition">
+                    <i data-lucide="printer" class="w-4 h-4"></i>
+                    <span>چاپکردن (Print)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- بەرنامەسازی پەڕەکە بە بەکارهێنانی Supabase -->
+    <script>
+        // ئینتیزاماتی Supabase بەپێی زانیارییەکانت
+        const SUPABASE_URL = 'https://ufhqswftnjbdguejbecb.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_M6BJiuB1IrzbMunjjB4rSw_KwNkQWm8';
+        
+        // دروستکردنی کڵایەنتی Supabase
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let purchases = [];
+
+        // دەستپێکردنەوە لە کاتی باربوونی پەڕە
+        window.addEventListener('DOMContentLoaded', () => {
+            setDefaultDate();
+            lucide.createIcons();
+            loadPurchases();
+        });
+
+        // پیشاندانی حاڵەتی بارکردن
+        function toggleLoading(show) {
+            const el = document.getElementById('loadingIndicator');
+            if (show) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+        }
+
+        // هێنانی داتاکان لە خشتەی purchases لە Supabase
+        async function loadPurchases() {
+            toggleLoading(true);
+            try {
+                const { data, error } = await supabaseClient
+                    .from('purchases')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                // گونجاندنی ناوەکان بۆ ئەپەکەمان
+                purchases = (data || []).map(item => ({
+                    id: item.id,
+                    model: item.model,
+                    color: item.color,
+                    storage: item.storage,
+                    imei: item.imei,
+                    sellerName: item.seller_name,
+                    sellerPhone: item.seller_phone,
+                    price: parseFloat(item.price) || 0,
+                    currency: item.currency,
+                    date: item.purchase_date,
+                    createdAt: item.created_at
+                }));
+
+                renderTable();
+                updateStats();
+            } catch (err) {
+                console.error('هەڵە لە هێنانی داتاکان:', err);
+                alert('هەڵەیەک ڕوویدا لە پەیوەستبوون بە Supabase: ' + (err.message || err));
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // دانانی بەرواری ئەمڕۆ
+        function setDefaultDate() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('purchaseDate').value = today;
+        }
+
+        // تۆمارکردنی کڕینی نوێ لە Supabase
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            const submitBtn = document.getElementById('submitBtn');
+            const originalBtnText = submitBtn.innerHTML;
+
+            const newPurchase = {
+                id: 'BP-' + Date.now().toString().slice(-6),
+                model: document.getElementById('model').value.trim(),
+                color: document.getElementById('color').value.trim(),
+                storage: document.getElementById('storage').value,
+                imei: document.getElementById('imei').value.trim(),
+                seller_name: document.getElementById('sellerName').value.trim(),
+                seller_phone: document.getElementById('sellerPhone').value.trim(),
+                price: parseFloat(document.getElementById('price').value) || 0,
+                currency: document.getElementById('currency').value,
+                purchase_date: document.getElementById('purchaseDate').value
+            };
+
+            // پشکنینی ئەوەی ئایا پێشتر ئەم IMEIـیە هەبووە لە سیستەم
+            const duplicate = purchases.some(p => p.imei === newPurchase.imei);
+            if (duplicate) {
+                if(!confirm('ئاگاداری: ئەم ژمارەی IMEI پێشتر تۆمارکراوە! ئایا دڵنیایت لە تۆمارکردنەوەی؟')) {
+                    return;
+                }
+            }
+
+            try {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span>پاشەکەوت دەکرێت...</span>';
+
+                // ناردنی داتا بۆ Supabase
+                const { error } = await supabaseClient
+                    .from('purchases')
+                    .insert([newPurchase]);
+
+                if (error) throw error;
+
+                // دووبارە هێنانەوەی نوێترین لیست
+                await loadPurchases();
+                closeModal();
+                document.getElementById('purchaseForm').reset();
+                setDefaultDate();
+            } catch (err) {
+                console.error('هەڵە لە پاشەکەوتکردن:', err);
+                alert('هەڵەیەک ڕوویدا لە کاتی پاشەکەوتکردن لە Supabase: ' + err.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+            }
+        }
+
+        // پیشاندانی خشتە لە دۆخی تاریکدا
+        function renderTable() {
+            const tbody = document.getElementById('inventoryTableBody');
+            const emptyState = document.getElementById('emptyState');
+            const query = document.getElementById('searchInput').value.toLowerCase().trim();
+            const storageFilter = document.getElementById('storageFilter').value;
+
+            tbody.innerHTML = '';
+
+            const filtered = purchases.filter(item => {
+                const matchesQuery = 
+                    item.model.toLowerCase().includes(query) ||
+                    item.sellerName.toLowerCase().includes(query) ||
+                    item.sellerPhone.toLowerCase().includes(query) ||
+                    item.imei.toLowerCase().includes(query);
+
+                const matchesStorage = storageFilter === "" || item.storage === storageFilter;
+                return matchesQuery && matchesStorage;
+            });
+
+            if (filtered.length === 0) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+                filtered.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-zinc-800/50 transition border-b border-zinc-800/70';
+
+                    const formattedPrice = item.currency === 'USD' 
+                        ? `$${item.price.toLocaleString()}` 
+                        : `${item.price.toLocaleString()} د.ع`;
+
+                    tr.innerHTML = `
+                        <td class="py-3 px-4">
+                            <div class="font-bold text-white">${item.model}</div>
+                            <span class="inline-block text-[11px] font-semibold text-brand-300 bg-brand-950/80 border border-brand-800/40 px-2 py-0.5 rounded-md mt-0.5">${item.storage}</span>
+                        </td>
+                        <td class="py-3 px-4 text-xs font-medium text-zinc-300">${item.color}</td>
+                        <td class="py-3 px-4 font-mono text-xs text-zinc-400 tracking-wider">${item.imei}</td>
+                        <td class="py-3 px-4">
+                            <div class="font-semibold text-xs text-zinc-200">${item.sellerName}</div>
+                            <div class="text-[11px] font-mono text-zinc-400">${item.sellerPhone}</div>
+                        </td>
+                        <td class="py-3 px-4 font-bold text-xs ${item.currency === 'USD' ? 'text-emerald-400' : 'text-indigo-400'}">${formattedPrice}</td>
+                        <td class="py-3 px-4 text-xs text-zinc-400 font-mono">${item.date}</td>
+                        <td class="py-3 px-4 text-center">
+                            <div class="flex items-center justify-center gap-1.5">
+                                <button onclick="showReceipt('${item.id}')" title="بینینی پسوولە" class="p-1.5 text-zinc-400 hover:text-brand-400 hover:bg-zinc-800 rounded-lg transition">
+                                    <i data-lucide="printer" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="deletePurchase('${item.id}')" title="سڕینەوە" class="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+            lucide.createIcons();
+        }
+
+        // نوێکردنەوەی ژمارەی ئامارەکان
+        function updateStats() {
+            document.getElementById('statTotalCount').innerText = purchases.length;
+
+            let totalUSD = 0;
+            let totalIQD = 0;
+            const todayStr = new Date().toISOString().split('T')[0];
+            let todayCount = 0;
+
+            purchases.forEach(item => {
+                if (item.currency === 'USD') totalUSD += item.price;
+                if (item.currency === 'IQD') totalIQD += item.price;
+                if (item.date === todayStr) todayCount++;
+            });
+
+            document.getElementById('statTotalUSD').innerText = `$${totalUSD.toLocaleString()}`;
+            document.getElementById('statTotalIQD').innerText = `${totalIQD.toLocaleString()} د.ع`;
+            document.getElementById('statTodayCount').innerText = todayCount;
+        }
+
+        // سڕینەوەی تۆمارێک لە Supabase
+        async function deletePurchase(id) {
+            if (!confirm('ئایا دڵنیایت لە سڕینەوەی ئەم تۆمارە لە بنکەدراوە؟')) return;
+
+            toggleLoading(true);
+            try {
+                const { error } = await supabaseClient
+                    .from('purchases')
+                    .delete()
+                    .eq('id', id);
+
+                if (error) throw error;
+                await loadPurchases();
+            } catch (err) {
+                console.error('هەڵە لە سڕینەوە:', err);
+                alert('هەڵەیەک ڕوویدا لە سڕینەوەی داتاکە: ' + err.message);
+                toggleLoading(false);
+            }
+        }
+
+        // سڕینەوەی هەموو تۆمارەکان لە خشتەی Supabase
+        async function clearAllData() {
+            if (purchases.length === 0) return;
+            if (!confirm('ئاگاداری: ئایا بە تەواوی دڵنیایت لە سڕینەوەی هەموو مۆبایلەکان لە بنکەدراوەی کلاود؟ ئەم کارە ناگەڕێتەوە.')) return;
+
+            toggleLoading(true);
+            try {
+                const { error } = await supabaseClient
+                    .from('purchases')
+                    .delete()
+                    .neq('id', '');
+
+                if (error) throw error;
+                await loadPurchases();
+            } catch (err) {
+                console.error('هەڵە لە سڕینەوەی گشتی:', err);
+                alert('هەڵەیەک ڕوویدا لە سڕینەوەی گشتی: ' + err.message);
+                toggleLoading(false);
+            }
+        }
+
+        // دەرکردنی داتا بۆ فایلی Excel / CSV
+        function exportToCSV() {
+            if (purchases.length === 0) {
+                alert('هیچ داتایەک نییە بۆ دەرکردن!');
+                return;
+            }
+
+            let csvContent = "\uFEFF"; // UTF-8 BOM
+            csvContent += "کۆد,مۆبایل,بیرگە,ڕەنگ,IMEI,ناوی فرۆشیار,تەلەفۆن,نرخ,دراو,بەروار\n";
+
+            purchases.forEach(row => {
+                const cleanRow = [
+                    row.id,
+                    `"${row.model}"`,
+                    row.storage,
+                    `"${row.color}"`,
+                    `\t${row.imei}`,
+                    `"${row.sellerName}"`,
+                    `\t${row.sellerPhone}`,
+                    row.price,
+                    row.currency,
+                    row.date
+                ];
+                csvContent += cleanRow.join(",") + "\n";
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.setAttribute("href", url);
+            a.setAttribute("download", `Biryar_Phone_Purchases_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        // پیشاندانی پسوولە
+        function showReceipt(id) {
+            const item = purchases.find(p => p.id === id);
+            if (!item) return;
+
+            document.getElementById('receiptCode').innerText = `#${item.id}`;
+            document.getElementById('rcModel').innerText = item.model;
+            document.getElementById('rcStorageColor').innerText = `${item.storage} | ${item.color}`;
+            document.getElementById('rcIMEI').innerText = item.imei;
+            document.getElementById('rcSellerName').innerText = item.sellerName;
+            document.getElementById('rcSellerPhone').innerText = item.sellerPhone;
+            document.getElementById('rcDate').innerText = item.date;
+            document.getElementById('rcPrice').innerText = item.currency === 'USD' ? `$${item.price.toLocaleString()}` : `${item.price.toLocaleString()} د.ع`;
+
+            document.getElementById('receiptModal').classList.remove('hidden');
+        }
+
+        function closeReceiptModal() {
+            document.getElementById('receiptModal').classList.add('hidden');
+        }
+
+        function openModal() {
+            document.getElementById('formModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('formModal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
